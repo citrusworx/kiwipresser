@@ -1,0 +1,95 @@
+services:
+  mariadb:
+    image: mariadb:latest
+    container_name: mariadb
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: wordpress
+      MYSQL_USER: wpuser
+      MYSQL_PASSWORD: wppass
+    volumes:
+      - ./data/mariadb:/var/lib/mysql
+    networks:
+      - kiwinet
+  postgres:
+    image: postgres:16.4
+    container_name: postgres
+    restart: always
+    environment:
+      POSTGRES_USER: kiwi
+      POSTGRES_PASSWORD: kiwipass
+      POSTGRES_DB: kiwipress
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - kiwinet
+  wordpress:
+    image: wordpress:latest
+    container_name: wordpress
+    depends_on:
+      - mariadb
+    restart: always
+    environment:
+      WORDPRESS_DB_HOST: mariadb:3306
+      WORDPRESS_DB_USER: wpuser
+      WORDPRESS_DB_PASSWORD: wppass
+      WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_DEBUG: 1
+      depends:
+      mariadb:
+      condition: service_healthy
+    ports:
+      - "8080:80"
+    networks:
+      - kiwinet
+
+
+  frontend:
+    build: ./frontend
+    container_name: kiwipress-frontend
+    working_dir: /usr/src/app
+    volumes:
+      - ./frontend:/usr/src/app
+      - /usr/src/app/node_modules
+    environment:
+      VITE_HOST: "0.0.0.0"
+      VITE_API_URL: http://backend:4000
+      VITE_WORDPRESS_API_URL: http://wordpress:80/wp-json
+    depends_on:
+      - backend
+    ports:
+      - "5173:5173"
+    networks:
+      - kiwinet
+
+  backend:
+    build: ./backend
+    container_name: kiwipress-backend
+    command: sh -c "npm install && npm run dev"
+    environment:
+      NODE_ENV: development
+      POSTGRES_HOST: postgres
+      POSTGRES_USER: winkadmin
+      POSTGRES_PASSWORD: kiwipass
+      POSTGRES_DB: kiwipress
+      WORDPRESS_API_URL: http://wordpress:80/wp-json
+    depends_on:
+      - postgres
+      - wordpress
+    ports:
+      - "4000:4000"
+    networks:
+      - kiwinet
+
+networks:
+  kiwinet:
+    name: kiwinet
+    driver: bridge
+
+volumes:
+  postgres_data:
+  mariadb_data:
+  verdaccio_data:
